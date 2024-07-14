@@ -3,7 +3,7 @@ package io.github.bonigarcia.wdm.online;
 import java.net.URL;
 
 /**
- * Plain-Old Java Object to parse JSON of https://registry.npmmirror.com/.
+ * Plain-Old Java Object to represent data from https://registry.npmmirror.com/.
  *
  * @author Boni Garcia
  * @since 5.1.0
@@ -17,8 +17,6 @@ public class NpmMirror {
     private String type;
     private URL url;
     private String modified;
-
-    // Constructors (if needed)
 
     // Getters and setters for all fields
     public String getId() {
