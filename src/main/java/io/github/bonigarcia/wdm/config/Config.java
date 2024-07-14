@@ -37,8 +37,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 
+import io.github.bonigarcia.wdm.versions.VersionDetector;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 
@@ -245,8 +247,10 @@ public class Config {
             "wdm.dockerBrowserSelenoidImageFormat", String.class);
     ConfigKey<String> dockerBrowserTwilioImageFormat = new ConfigKey<>(
             "wdm.dockerBrowserTwilioImageFormat", String.class);
-    ConfigKey<String> dockerBrowserAerokubeImageFormat = new ConfigKey<>(
-            "wdm.dockerBrowserAerokubeImageFormat", String.class);
+    //    ConfigKey<String> dockerBrowserAerokubeImageFormat = new ConfigKey<>(
+//            "wdm.dockerBrowserAerokubeImageFormat", String.class);
+    ConfigKey<String> aerokubeImageFormat = new ConfigKey<>(
+            "wdm.aerokubeImageFormat", String.class);
     ConfigKey<String> dockerBrowserMobileImageFormat = new ConfigKey<>(
             "wdm.dockerBrowserMobileImageFormat", String.class);
     ConfigKey<String> dockerRecordingImage = new ConfigKey<>(
@@ -1286,13 +1290,37 @@ public class Config {
         return this;
     }
 
-    public String getDockerBrowserAerokubeImageFormat() {
-        return resolve(dockerBrowserAerokubeImageFormat);
+//    public String getDockerBrowserAerokubeImageFormat() {
+//        return resolve(dockerBrowserAerokubeImageFormat);
+//    }
+
+    // Long Identifier smell
+    public String getAerokubeImageFormat() {
+        return resolve(aerokubeImageFormat);
     }
 
     public Config setDockerBrowserAerokubeImageFormat(String value) {
-        this.dockerBrowserAerokubeImageFormat.setValue(value);
+        this.aerokubeImageFormat.setValue(value);
         return this;
+    }
+    public String getTarget(String driverVersion, String driverName, DriverManagerType driverManagerType, URL url) {
+        String zip = url.getFile().substring(url.getFile().lastIndexOf('/'));
+        String cachePath = getCacheFolder().getAbsolutePath();
+        OperatingSystem os = getOperatingSystem();
+        String architecture = getArchitecture().toString().toLowerCase(Locale.ROOT);
+        if (os.isWin() && !VersionDetector.isCfT(driverVersion)
+                && (driverManagerType == DriverManagerType.CHROME
+                || driverManagerType == DriverManagerType.CHROMIUM)) {
+            architecture = "32";
+        }
+
+        String osName = os.getName();
+        if (getArchitecture() == Architecture.ARM64) {
+            osName += "-";
+        }
+        return isAvoidOutputTree() ? cachePath + zip
+                : cachePath + File.separator + driverName + File.separator + osName
+                + architecture + File.separator + driverVersion + zip;
     }
 
     public String getDockerBrowserMobileImageFormat() {

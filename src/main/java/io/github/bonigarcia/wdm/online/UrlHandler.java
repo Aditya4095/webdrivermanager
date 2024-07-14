@@ -64,17 +64,15 @@ public class UrlHandler {
     String shortDriverName;
     Function<String, Optional<URL>> buildUrlFunction;
 
-    public UrlHandler(Config config, List<URL> candidateUrls,
-            String driverVersion, String shortDriverName,
-            Function<String, Optional<URL>> buildUrlFunction) {
-        this.config = config;
-        this.candidateUrls = candidateUrls;
-        this.driverVersion = driverVersion;
-        this.shortDriverName = shortDriverName;
-        this.buildUrlFunction = buildUrlFunction;
+    public UrlHandler(UrlHandlerConfig config) {
+        this.config = config.getConfig();
+        this.candidateUrls = config.getCandidateUrls();
+        this.driverVersion = config.getDriverVersion();
+        this.shortDriverName = config.getShortDriverName();
+        this.buildUrlFunction = config.getBuildUrlFunction();
     }
 
-    public void filterByDriverName(String driverName) {
+    public void filterDName(String driverName) {
         candidateUrls = candidateUrls.stream()
                 .filter(url -> url.getFile().contains(driverName)
                         && !url.getFile().contains("-symbols"))
@@ -88,7 +86,7 @@ public class UrlHandler {
                 .collect(toList());
     }
 
-    public void filterByLatestVersion(Function<URL, String> getCurrentVersion) {
+    public void filterNewVersion(Function<URL, String> getCurrentVersion) {
         log.trace("Checking the latest version using URL list {}",
                 candidateUrls);
         List<URL> out = new ArrayList<>();
@@ -136,7 +134,7 @@ public class UrlHandler {
         }
     }
 
-    public void filterByOs(String driverName, String osName) {
+    public void filterOs(String driverName, String osName) {
         if (!driverName.equalsIgnoreCase("IEDriverServer")) {
             log.trace("URLs before filtering by OS ({}): {}", osName,
                     candidateUrls);
@@ -169,7 +167,7 @@ public class UrlHandler {
         }
     }
 
-    public void filterByIgnoredVersions(List<String> ignoredVersions) {
+    public void filterByIgnVer(List<String> ignoredVersions) {
         if (!ignoredVersions.isEmpty() && !candidateUrls.isEmpty()) {
             log.trace("URLs before filtering by ignored versions ({}): {}",
                     ignoredVersions, candidateUrls);

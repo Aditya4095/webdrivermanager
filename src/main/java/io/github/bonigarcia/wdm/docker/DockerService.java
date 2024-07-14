@@ -462,7 +462,7 @@ public class DockerService {
             case EDGE:
             case SAFARI:
                 String dockerBrowserAerokubeImageFormat = String.format(
-                        config.getDockerBrowserAerokubeImageFormat(),
+                        config.getAerokubeImageFormat(),
                         browserName, "");
                 dockerHubTags = dockerHubService
                         .listTags(dockerBrowserAerokubeImageFormat);
@@ -511,7 +511,7 @@ public class DockerService {
         switch (browserName) {
         case "edge":
         case "safari":
-            dockerImageFormat = config.getDockerBrowserAerokubeImageFormat();
+            dockerImageFormat = config.getAerokubeImageFormat();
             dockerImage = String.format(dockerImageFormat, browserName,
                     browserVersion);
             break;

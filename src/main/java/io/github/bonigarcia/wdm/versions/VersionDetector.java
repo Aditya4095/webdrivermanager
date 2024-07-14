@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
 import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
@@ -45,7 +46,11 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathFactory;
 
 import org.apache.commons.io.IOUtils;
@@ -59,6 +64,7 @@ import io.github.bonigarcia.wdm.online.GoodVersions.Versions;
 import io.github.bonigarcia.wdm.online.HttpClient;
 import io.github.bonigarcia.wdm.online.LastGoodVersions;
 import io.github.bonigarcia.wdm.online.Parser;
+import org.xml.sax.SAXException;
 
 /**
  * Driver and browser version detector.
@@ -75,7 +81,7 @@ public class VersionDetector {
     static final String CFT_URL = "https://googlechromelabs.github.io/chrome-for-testing/";
     static final int MIN_CHROMEDRIVER_IN_CFT = 115;
 
-    final Logger log = getLogger(lookup().lookupClass());
+    static final Logger log = getLogger(lookup().lookupClass());
 
     Config config;
     HttpClient httpClient;
@@ -181,30 +187,30 @@ public class VersionDetector {
 
             OperatingSystem operatingSystem = config.getOperatingSystem();
             switch (operatingSystem) {
-            case WIN:
-                if (command.toLowerCase(ROOT).contains("wmic")) {
-                    File wmicLocation = findFileLocation("wmic.exe");
-                    String newCommand = command.replace("Version", "Caption");
-                    String captionOutput = runAndWait(wmicLocation,
-                            newCommand.split(" "));
-                    int iCaption = captionOutput.indexOf("=");
-                    if (iCaption != -1) {
-                        pathStr = captionOutput.substring(iCaption + 1);
+                case WIN:
+                    if (command.toLowerCase(ROOT).contains("wmic")) {
+                        File wmicLocation = findFileLocation("wmic.exe");
+                        String newCommand = command.replace("Version", "Caption");
+                        String captionOutput = runAndWait(wmicLocation,
+                                newCommand.split(" "));
+                        int iCaption = captionOutput.indexOf("=");
+                        if (iCaption != -1) {
+                            pathStr = captionOutput.substring(iCaption + 1);
+                        }
                     }
-                }
-                break;
+                    break;
 
-            case MAC:
-            case LINUX:
-            default:
-                if (firstCommand.contains("/")) {
-                    pathStr = firstCommand;
-                } else {
-                    String[] commandArray = new String[] { "bash", "-c",
-                            "type -p " + firstCommand };
-                    pathStr = runAndWait(commandArray);
-                }
-                break;
+                case MAC:
+                case LINUX:
+                default:
+                    if (firstCommand.contains("/")) {
+                        pathStr = firstCommand;
+                    } else {
+                        String[] commandArray = new String[] { "bash", "-c",
+                                "type -p " + firstCommand };
+                        pathStr = runAndWait(commandArray);
+                    }
+                    break;
             }
             Path path = Paths.get(pathStr);
             if (!isNullOrEmpty(pathStr) && Files.exists(path)) {
@@ -274,7 +280,7 @@ public class VersionDetector {
     }
 
     protected List<String> getCommandsList(String browserName,
-            Properties commandsProperties) {
+                                           Properties commandsProperties) {
         OperatingSystem operatingSystem = config.getOperatingSystem();
         return Collections.list(commandsProperties.keys()).stream()
                 .map(Object::toString).filter(s -> s.contains(browserName))
@@ -343,7 +349,7 @@ public class VersionDetector {
     }
 
     protected InputStream getVersionsInputStream(String propertiesName,
-            boolean online) throws IOException {
+                                                 boolean online) throws IOException {
         String onlineMessage = online ? ONLINE : LOCAL;
         log.trace("Reading {} {} to find out driver version", onlineMessage,
                 propertiesName);
@@ -424,59 +430,75 @@ public class VersionDetector {
         return folder.exists() && folder.isDirectory() && file.exists()
                 && file.isFile();
     }
-
     public boolean isSnap() {
         return isSnap;
     }
-
     public static final Optional<String> getWdmVersion(Class<?> clazz) {
+        Optional<String> versionFromPom = getVersionFromPom(clazz);
+        if (versionFromPom.isPresent()) {
+            return versionFromPom;
+        }
+
+        Optional<String> versionFromProperties = getVersionFromProperties(clazz);
+        if (versionFromProperties.isPresent()) {
+            return versionFromProperties;
+        }
+
+        return getVersionFromPackage(clazz);
+    }
+
+    private static Optional<String> getVersionFromPom(Class<?> clazz) {
         try {
             String className = clazz.getName();
             String classfileName = "/" + className.replace('.', '/') + ".class";
             URL classfileResource = clazz.getResource(classfileName);
+
             if (classfileResource != null) {
-                Path absolutePackagePath = Paths.get(classfileResource.toURI())
-                        .getParent();
-                int packagePathSegments = className.length()
-                        - className.replace(".", "").length();
+                Path absolutePackagePath = Paths.get(classfileResource.toURI()).getParent();
+                int packagePathSegments = className.split("\\.").length;
                 Path path = absolutePackagePath;
-                for (int i = 0, segmentsToRemove = packagePathSegments
-                        + 2; i < segmentsToRemove; i++) {
+                int segmentsToRemove = packagePathSegments + 2;
+                for (int i = 0; i < segmentsToRemove; i++) {
                     path = path.getParent();
                 }
+
                 Path pom = path.resolve("pom.xml");
-                try (InputStream is = Files.newInputStream(pom)) {
-                    Document doc = loadXML(is);
-                    doc.getDocumentElement().normalize();
-                    String version = (String) XPathFactory.newInstance()
-                            .newXPath().compile("/project/version")
-                            .evaluate(doc, XPathConstants.STRING);
-                    if (version != null) {
-                        version = version.trim();
-                        if (!version.isEmpty()) {
-                            return Optional.of(version);
-                        }
-                    }
-                }
+                return getVersionFromXml(pom);
             }
+        } catch (URISyntaxException | NullPointerException e) {
+            // Log the exception or handle it appropriately
+            log.error("Error while getting version from POM for class {}: {}", clazz.getName(), e.getMessage());
         } catch (Exception e) {
-            // Ignore
+            // Handle unexpected exceptions
+            log.error("Unexpected error while getting version from POM for class {}: {}", clazz.getName(), e.getMessage(), e);
         }
 
-        try (InputStream is = clazz.getResourceAsStream(
-                "/META-INF/maven/io.github.bonigarcia/webdrivermanager/pom.properties")) {
+        return Optional.empty();
+    }
+
+
+
+    private static Optional<String> getVersionFromProperties(Class<?> clazz) {
+        try (InputStream is = clazz.getResourceAsStream("/META-INF/maven/io.github.bonigarcia/webdrivermanager/pom.properties")) {
             if (is != null) {
                 Properties p = new Properties();
                 p.load(is);
                 String version = p.getProperty("version", "").trim();
+
                 if (!version.isEmpty()) {
                     return Optional.of(version);
                 }
             }
-        } catch (Exception e) {
-            // Ignore
+        } catch (IOException | NullPointerException e) {
+            // Log the exception or handle it appropriately
+            log.error("Error while getting version from properties for class {}: {}", clazz.getName(), e.getMessage());
         }
 
+        return Optional.empty();
+    }
+
+
+    private static Optional<String> getVersionFromPackage(Class<?> clazz) {
         String version = null;
         Package pkg = clazz.getPackage();
         if (pkg != null) {
@@ -488,5 +510,42 @@ public class VersionDetector {
         version = version == null ? "" : version.trim();
         return version.isEmpty() ? Optional.empty() : Optional.of(version);
     }
+
+    private static Optional<String> getVersionFromXml(Path pom) {
+        try (InputStream is = Files.newInputStream(pom)) {
+            Document doc = loadXML(is);
+            doc.getDocumentElement().normalize();
+            String version = (String) XPathFactory.newInstance().newXPath().compile("/project/version")
+                    .evaluate(doc, XPathConstants.STRING);
+
+            if (version != null && !version.isEmpty()) {
+                return Optional.of(version.trim());
+            }
+        } catch (IOException | SAXException | XPathExpressionException | NullPointerException e) {
+            // Log the exception or handle it appropriately
+            log.error("Error while getting version from XML: {}", e.getMessage());
+        }
+
+        return Optional.empty();
+    }
+
+
+
+    private static Document loadXML(InputStream is) throws IOException, SAXException {
+        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+        DocumentBuilder db;
+        try {
+            db = dbf.newDocumentBuilder();
+            return db.parse(is);
+        } catch (ParserConfigurationException e) {
+            throw new RuntimeException("Error creating XML parser", e);
+        } catch (SAXException | IOException e) {
+            // Log the exception or handle it appropriately
+            log.error("Error while parsing XML: {}", e.getMessage());
+            throw e; // Re-throw the exception after logging
+        }
+    }
+
+
 
 }

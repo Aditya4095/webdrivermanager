@@ -93,6 +93,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.xpath.XPath;
 
+import io.github.bonigarcia.wdm.online.*;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -140,12 +141,6 @@ import io.github.bonigarcia.wdm.managers.InternetExplorerDriverManager;
 import io.github.bonigarcia.wdm.managers.OperaDriverManager;
 import io.github.bonigarcia.wdm.managers.SafariDriverManager;
 import io.github.bonigarcia.wdm.managers.VoidDriverManager;
-import io.github.bonigarcia.wdm.online.Downloader;
-import io.github.bonigarcia.wdm.online.GitHubApi;
-import io.github.bonigarcia.wdm.online.HttpClient;
-import io.github.bonigarcia.wdm.online.NpmMirror;
-import io.github.bonigarcia.wdm.online.S3NamespaceContext;
-import io.github.bonigarcia.wdm.online.UrlHandler;
 import io.github.bonigarcia.wdm.versions.VersionComparator;
 import io.github.bonigarcia.wdm.versions.VersionDetector;
 import io.github.bonigarcia.wdm.webdriver.WebDriverBrowser;
@@ -1441,8 +1436,10 @@ public abstract class WebDriverManager {
             throws IOException {
         List<URL> candidateUrls = getDriverUrls(driverVersion);
         String shortDriverName = getShortDriverName();
-        UrlHandler urlHandler = new UrlHandler(config(), candidateUrls,
+        UrlHandlerConfig urlHandlerConfig = new UrlHandlerConfig(config(), candidateUrls,
                 driverVersion, shortDriverName, this::buildUrl);
+        UrlHandler urlHandler = new UrlHandler(urlHandlerConfig);
+
 
         boolean getLatest = isUnknown(driverVersion);
         boolean continueSearchingVersion;
@@ -1452,12 +1449,12 @@ public abstract class WebDriverManager {
         do {
             // Filter by driver name
             if (!isMirrorCfT) {
-                urlHandler.filterByDriverName(shortDriverName);
+                urlHandler.filterDName(shortDriverName);
             }
 
             // Filter for latest or concrete driver version
             if (getLatest) {
-                urlHandler.filterByLatestVersion(this::getCurrentVersion);
+                urlHandler.filterNewVersion(this::getCurrentVersion);
             } else {
                 urlHandler.filterByVersion(driverVersion);
             }
@@ -1485,14 +1482,14 @@ public abstract class WebDriverManager {
 
             // Filter by OS
             if (!isEdgeArm64 || isMac) {
-                urlHandler.filterByOs(getDriverName(), os);
+                urlHandler.filterOs(getDriverName(), os);
             }
 
             // Filter by architecture
             urlHandler.filterByArch(architecture);
 
             // Rest of filters
-            urlHandler.filterByIgnoredVersions(config().getIgnoreVersions());
+            urlHandler.filterByIgnVer(config().getIgnoreVersions());
             urlHandler.filterByBeta(config().isUseBetaVersions());
 
             continueSearchingVersion = urlHandler.hasNoCandidateUrl()
@@ -1511,11 +1508,12 @@ public abstract class WebDriverManager {
             List<URL> driversFromMirror = getMirrorUrls(
                     urlHandler.getCandidateUrl(), "");
             urlHandler.setCandidateUrls(driversFromMirror);
-            urlHandler.filterByDriverName(shortDriverName);
+            urlHandler.filterDName(shortDriverName);
         }
 
         return urlHandler;
     }
+
 
     protected List<URL> getDriversFromMirror(URL driverUrl,
             String driverVersion) throws IOException {

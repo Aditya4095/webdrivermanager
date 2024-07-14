@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
+import java.nio.file.Files;
 import java.util.Collection;
 import java.util.Enumeration;
 import java.util.List;
@@ -82,10 +83,10 @@ public class Downloader {
     }
 
     public synchronized String download(URL url, String driverVersion,
-            String driverName, DriverManagerType driverManagerType)
+                                        String driverName, DriverManagerType driverManagerType)
             throws IOException {
-        File targetFile = getTarget(driverVersion, driverName,
-                driverManagerType, url);
+        File targetFile = new File(config.getTarget(driverVersion, driverName,
+                driverManagerType, url));
         Optional<File> driver = checkDriver(driverName, targetFile);
         if (!driver.isPresent()) {
             driver = downloadAndExtract(url, targetFile);
@@ -93,35 +94,35 @@ public class Downloader {
         return driver.get().toString();
     }
 
-    public File getTarget(String driverVersion, String driverName,
-            DriverManagerType driverManagerType, URL url) {
-        String zip = url.getFile().substring(url.getFile().lastIndexOf('/'));
-        String cachePath = config.getCacheFolder().getAbsolutePath();
-        OperatingSystem os = config.getOperatingSystem();
-        String architecture = config.getArchitecture().toString()
-                .toLowerCase(ROOT);
-        if (os.isWin() && !VersionDetector.isCfT(driverVersion)
-                && (driverManagerType == CHROME
-                        || driverManagerType == CHROMIUM)) {
-            log.trace(
-                    "{} in Windows is only available for 32 bits architecture",
-                    driverName);
-            architecture = "32";
-        }
-
-        String osName = os.getName();
-        if (config.getArchitecture() == ARM64) {
-            osName += "-";
-        }
-        String target = config.isAvoidOutputTree() ? cachePath + zip
-                : cachePath + separator + driverName + separator + osName
-                        + architecture + separator + driverVersion + zip;
-
-        log.trace("Target file for URL {} driver version {} = {}", url,
-                driverVersion, target);
-
-        return new File(target);
-    }
+//    public File getTarget(String driverVersion, String driverName,
+//            DriverManagerType driverManagerType, URL url) {
+//        String zip = url.getFile().substring(url.getFile().lastIndexOf('/'));
+//        String cachePath = config.getCacheFolder().getAbsolutePath();
+//        OperatingSystem os = config.getOperatingSystem();
+//        String architecture = config.getArchitecture().toString()
+//                .toLowerCase(ROOT);
+//        if (os.isWin() && !VersionDetector.isCfT(driverVersion)
+//                && (driverManagerType == CHROME
+//                        || driverManagerType == CHROMIUM)) {
+//            log.trace(
+//                    "{} in Windows is only available for 32 bits architecture",
+//                    driverName);
+//            architecture = "32";
+//        }
+//
+//        String osName = os.getName();
+//        if (config.getArchitecture() == ARM64) {
+//            osName += "-";
+//        }
+//        String target = config.isAvoidOutputTree() ? cachePath + zip
+//                : cachePath + separator + driverName + separator + osName
+//                        + architecture + separator + driverVersion + zip;
+//
+//        log.trace("Target file for URL {} driver version {} = {}", url,
+//                driverVersion, target);
+//
+//        return new File(target);
+//    }
 
     private Optional<File> downloadAndExtract(URL url, File targetFile)
             throws IOException {
@@ -288,8 +289,8 @@ public class Downloader {
                     }
                     subEntries = entry.getDirectoryEntries();
                     for (int i = 0; i < subEntries.length; i++) {
-                        try (OutputStream out = new FileOutputStream(
-                                subEntryFile)) {
+                        assert false;
+                        try (OutputStream out = Files.newOutputStream(subEntryFile.toPath())) {
                             subEntryFile = new File(entryFileName.toString(),
                                     subEntries[i].getName());
                             IOUtils.copy(taris, out);
