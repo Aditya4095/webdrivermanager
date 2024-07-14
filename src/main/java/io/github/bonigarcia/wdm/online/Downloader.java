@@ -256,7 +256,7 @@ public class Downloader {
         File target = new File(archive.getParentFile(), fileName);
 
         try (GZIPInputStream in = new GZIPInputStream(
-                new FileInputStream(archive))) {
+                Files.newInputStream(archive.toPath()))) {
             try (FileOutputStream out = new FileOutputStream(target)) {
                 for (int c = in.read(); c != -1; c = in.read()) {
                     out.write(c);
